@@ -1,5 +1,5 @@
 import argparse
-from esm import pretrained
+import esm
 import os
 from pathlib import Path
 import torch
@@ -22,7 +22,7 @@ def load_esm2(model_name: str):
       2) esm.pretrained.load_model_and_alphabet_hub(name)  [hub helper]
       3) esm.pretrained.load_model_and_alphabet(name)  [older API]
     """
-    import esm
+
     # 1) direct constructor if present
     if hasattr(esm, "pretrained") and hasattr(esm.pretrained, model_name):
         return getattr(esm.pretrained, model_name)()
