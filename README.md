@@ -10,7 +10,7 @@
   `source venv/bin/activate` 
 
 - Install dependencies:  
-`pip install esm`
+`pip install fair-esm`
 
 
 ## Scripts
