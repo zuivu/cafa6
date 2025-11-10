@@ -1,48 +1,45 @@
 import argparse
-import esm
 import os
 from pathlib import Path
 import torch
+from transformers import T5Tokenizer, T5EncoderModel
 
 
-# Valid ESM-2 names (UR50D training)
-ESM2_MODELS = [
-    "esm2_t6_8M_UR50D",
-    "esm2_t12_35M_UR50D",
-    "esm2_t30_150M_UR50D",
-    "esm2_t33_650M_UR50D",
-    "esm2_t36_3B_UR50D",
-    "esm2_t48_15B_UR50D",
+# Valid ProtTrans model names
+PROTRANS_MODELS = [
+    "Rostlab/prot_t5_xl_uniref50",
+    "Rostlab/prot_t5_xl_bfd",
+    "Rostlab/prot_t5_xxl_uniref50",
+    "Rostlab/prot_t5_xxl_bfd",
+    "Rostlab/prot_bert",
+    "Rostlab/prot_bert_bfd",
 ]
 
-def load_esm2(model_name: str):
+def load_protrans(model_name: str):
     """
-    Tries, in order:
-      1) esm.pretrained.<name>()  [newer fair-esm]
-      2) esm.pretrained.load_model_and_alphabet_hub(name)  [hub helper]
-      3) esm.pretrained.load_model_and_alphabet(name)  [older API]
+    Load ProtTrans model and tokenizer from Hugging Face.
+    
+    Args:
+        model_name: Name of the ProtTrans model on Hugging Face
+        
+    Returns:
+        Tuple of (model, tokenizer)
     """
-
-    # 1) direct constructor if present
-    if hasattr(esm, "pretrained") and hasattr(esm.pretrained, model_name):
-        return getattr(esm.pretrained, model_name)()
-    # 2) hub helper (newer)
-    if hasattr(esm.pretrained, "load_model_and_alphabet_hub"):
-        return esm.pretrained.load_model_and_alphabet_hub(model_name)
-    # 3) legacy helper (older)
-    if hasattr(esm.pretrained, "load_model_and_alphabet"):
-        return esm.pretrained.load_model_and_alphabet(model_name)
-    raise RuntimeError(
-        f"Cannot load '{model_name}'. Your installed 'esm' lacks known loaders."
-    )
+    print(f"Loading tokenizer for {model_name}...")
+    tokenizer = T5Tokenizer.from_pretrained(model_name, do_lower_case=False)
+    
+    print(f"Loading model {model_name}...")
+    model = T5EncoderModel.from_pretrained(model_name)
+    
+    return model, tokenizer
 
 
-def download_esm2_model(model_name: str, save_dir: Path) -> None:
+def download_protrans_model(model_name: str, save_dir: Path) -> None:
     """
-    Download ESM-2 model to a specific directory
+    Download ProtTrans model to a specific directory
 
     Args:
-        model_name: Model variant to download
+        model_name: Model variant to download (e.g., "Rostlab/prot_t5_xl_uniref50")
         save_dir: Directory where to save the model
     """
 
@@ -51,31 +48,35 @@ def download_esm2_model(model_name: str, save_dir: Path) -> None:
     print(f"Downloading {model_name} to {save_dir}...")
     print("This may take a while depending on model size and internet speed...")
 
-    # Set cache directory before loading model
-    os.environ['TORCH_HOME'] = str(save_dir)
+    # Set cache directory for transformers
+    os.environ['TRANSFORMERS_CACHE'] = str(save_dir)
+    os.environ['HF_HOME'] = str(save_dir)
 
-    # Download model
-    model, alphabet = load_esm2(model_name)
+    # Download model and tokenizer
+    model, tokenizer = load_protrans(model_name)
 
-    # Save model weights
-    model_path = save_dir / f"{model_name}.pt"
-    torch.save({
-        'model_state_dict': model.state_dict(),
-        'model_name': model_name,
-    }, model_path)
+    # Save model and tokenizer to the specified directory
+    model_save_path = save_dir / model_name.replace("/", "_")
+    model_save_path.mkdir(parents=True, exist_ok=True)
+    
+    model.save_pretrained(model_save_path)
+    tokenizer.save_pretrained(model_save_path)
 
-    print(f"Model downloaded and saved to: {model_path}")
-    print(f"File size: {model_path.stat().st_size / (1024**3):.2f} GB")
+    print(f"Model downloaded and saved to: {model_save_path}")
+    
+    # Calculate directory size
+    total_size = sum(f.stat().st_size for f in model_save_path.rglob('*') if f.is_file())
+    print(f"Total size: {total_size / (1024**3):.2f} GB")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download an ESM-2 model by name to a target directory.")
+    parser = argparse.ArgumentParser(description="Download a ProtTrans model by name to a target directory.")
     parser.add_argument(
         "--model_name",
         type=str,
-        default="esm2_t33_650M_UR50D",
-        choices=ESM2_MODELS,
-        help="Name of the ESM-2 model variant",
+        default="Rostlab/prot_t5_xl_uniref50",
+        choices=PROTRANS_MODELS,
+        help="Name of the ProtTrans model variant from Hugging Face",
     )
     parser.add_argument(
         "--model_dir",
@@ -85,7 +86,7 @@ def main():
     )
     args = parser.parse_args()
 
-    download_esm2_model(args.model_name, Path(args.model_dir))
+    download_protrans_model(args.model_name, Path(args.model_dir))
 
 
 if __name__ == "__main__":
